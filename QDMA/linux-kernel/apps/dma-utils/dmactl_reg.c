@@ -204,8 +204,9 @@ static void print_repeated_reg(uint32_t *bar, struct xreg_info *xreg,
 
 	for (i = start; i < end; i++) {
 		uint32_t addr = xreg->addr + (i * step);
-		char name[40];
-		snprintf(name, 40, "%s_%d",
+		// Name must be bigger than xreg->name + 10 characters
+		char name[128];
+		snprintf(name, 128, "%s_%d",
 				xreg->name, i);
 
 		if (xcmd == NULL) {
