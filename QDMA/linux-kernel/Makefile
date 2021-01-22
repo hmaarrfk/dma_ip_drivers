@@ -120,7 +120,7 @@ install-apps:
 install-dev:
 	@echo "installing development headers to $(dev_install_path) ..."
 	@mkdir -p -m 755 $(dev_install_path)
-	@install -v -m 755 driver/include/* $(dev_install_path)
+	@install -v -m 755 apps/include/* $(dev_install_path)
 
 .PHONY: uninstall-mods
 uninstall-mods:
