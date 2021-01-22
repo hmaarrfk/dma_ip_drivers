@@ -768,6 +768,7 @@ static char *xnl_mem_alloc(int l, struct genl_info *info)
 	char ebuf[XNL_ERR_BUFLEN];
 	char *buf = kmalloc(l, GFP_KERNEL);
 	int rv;
+	ebuf[0] = '\0';
 
 	if (buf) {
 		memset(buf, 0, l);
@@ -789,6 +790,7 @@ static struct xlnx_pci_dev *xnl_rcv_check_xpdev(struct genl_info *info)
 	struct xlnx_pci_dev *xpdev;
 	char err[XNL_ERR_BUFLEN];
 	int rv = 0;
+	err[0] = '\0';
 
 	if (info == NULL)
 		return NULL;
@@ -878,7 +880,9 @@ static struct xlnx_qdata *xnl_rcv_check_qidx(struct genl_info *info,
 				int buflen)
 {
 	char ebuf[XNL_ERR_BUFLEN];
-	struct xlnx_qdata *qdata = xpdev_queue_get(xpdev, qconf->qidx,
+	struct xlnx_qdata *qdata;
+	ebuf[0] = '\0';
+	qdata = xpdev_queue_get(xpdev, qconf->qidx,
 					qconf->q_type, 1, ebuf, XNL_ERR_BUFLEN);
 
 	if (!qdata) {
@@ -1087,6 +1091,7 @@ static int xnl_dev_version_capabilities(struct sk_buff *skb2,
 	char buf[XNL_RESP_BUFLEN_MIN];
 	int buflen = XNL_RESP_BUFLEN_MIN;
 	int rv = 0;
+	buf[0] = '\0';
 
 	if (info == NULL)
 		return -EINVAL;
@@ -1437,6 +1442,7 @@ static int xnl_get_queue_state(struct sk_buff *skb2, struct genl_info *info)
 	struct sk_buff *skb;
 	void *hdr;
 	struct qdma_q_state qstate;
+	buf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -1695,6 +1701,7 @@ static int xnl_q_start(struct sk_buff *skb2, struct genl_info *info)
 	unsigned short qidx;
 	unsigned char dir;
 	unsigned char is_bufsz_idx = 1;
+	buf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -1800,6 +1807,7 @@ static int xnl_q_stop(struct sk_buff *skb2, struct genl_info *info)
 	unsigned int i;
 	unsigned short qidx;
 	unsigned char dir;
+	buf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -1873,6 +1881,7 @@ static int xnl_q_del(struct sk_buff *skb2, struct genl_info *info)
 	unsigned int i;
 	unsigned short qidx;
 	unsigned char dir;
+	buf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -2019,6 +2028,8 @@ static int xnl_q_dump(struct sk_buff *skb2, struct genl_info *info)
 	int buf_len = XNL_RESP_BUFLEN_MAX;
 	unsigned int buf_idx = 0;
 	char banner[DUMP_LINE_SZ];
+	ebuf[0] = '\0';
+	banner[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -2140,6 +2151,7 @@ static int xnl_q_dump_desc(struct sk_buff *skb2, struct genl_info *info)
 	unsigned char dir;
 	int buf_len = XNL_RESP_BUFLEN_MAX;
 	unsigned int buf_idx = 0;
+	ebuf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -2236,6 +2248,7 @@ static int xnl_q_dump_cmpt(struct sk_buff *skb2, struct genl_info *info)
 	unsigned char dir;
 	int buf_len = XNL_RESP_BUFLEN_MAX;
 	unsigned int buf_idx = 0;
+	ebuf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -2465,6 +2478,7 @@ static int xnl_err_induce(struct sk_buff *skb2, struct genl_info *info)
 	unsigned char is_qp;
 	int rv;
 	u32 err;
+	ebuf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -2523,6 +2537,7 @@ static int xnl_q_read_pkt(struct sk_buff *skb2, struct genl_info *info)
 	unsigned int i;
 	unsigned short qidx;
 	int buf_len = XNL_RESP_BUFLEN_MAX;
+	ebuf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -2659,6 +2674,7 @@ static int xnl_register_read(struct sk_buff *skb2, struct genl_info *info)
 	unsigned int bar_num = 0, reg_addr = 0;
 	uint32_t reg_val = 0;
 	int rv = 0, err = 0;
+	buf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
@@ -2742,6 +2758,7 @@ static int xnl_register_write(struct sk_buff *skb2, struct genl_info *info)
 	unsigned int bar_num = 0, reg_addr = 0;
 	uint32_t reg_val = 0;
 	int rv = 0;
+	buf[0] = '\0';
 
 	if (info == NULL)
 		return 0;
