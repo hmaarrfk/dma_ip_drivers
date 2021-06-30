@@ -10,3 +10,5 @@ QDMA/linux-kernel/driver/src/.qdma-vf.mod.cmd
 QDMA/linux-kernel/driver/src/libqdma
 QDMA/linux-kernel/driver/src/qdma-pf.mod
 QDMA/linux-kernel/driver/src/qdma-vf.mod
+QDMA/linux-kernel/driver/src/.Module.symvers.cmd
+QDMA/linux-kernel/driver/src/.modules.order.cmd
