@@ -200,7 +200,7 @@ static void print_repeated_reg(uint32_t *bar, struct xreg_info *xreg,
 	int step = xreg->step ? xreg->step : 4;
 	uint32_t val;
 	int32_t rv = 0;
-	char reg_dump[100];
+	char reg_dump[200];
 
 	for (i = start; i < end; i++) {
 		uint32_t addr = xreg->addr + (i * step);
@@ -221,7 +221,7 @@ static void print_repeated_reg(uint32_t *bar, struct xreg_info *xreg,
 				continue;
 			}
 		}
-		snprintf(reg_dump, 100, "[%#7x] %-47s %#-10x %u\n",
+		snprintf(reg_dump, 200, "[%#7x] %-47s %#-10x %u\n",
 			addr, name, val, val);
 		if (log_reg)
 			log_reg(reg_dump);
