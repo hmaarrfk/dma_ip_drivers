@@ -270,6 +270,7 @@ static void read_regs(uint32_t *bar, struct xreg_info *reg_list,
 							   xcmd);
 					if (rv < 0)
 						continue;
+					val = xcmd->req.reg.val;
 				}
 				snprintf(reg_dump, 100,
 					 "[%#7x] %-47s %#-10x %u\n",
@@ -288,6 +289,7 @@ static void read_regs(uint32_t *bar, struct xreg_info *reg_list,
 						   xcmd);
 				if (rv < 0)
 					continue;
+				val = xcmd->req.reg.val;
 			}
 
 			uint32_t v = (val >> xreg->shift) &
