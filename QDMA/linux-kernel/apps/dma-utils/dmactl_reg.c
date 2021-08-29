@@ -220,6 +220,7 @@ static void print_repeated_reg(uint32_t *bar, struct xreg_info *xreg,
 					log_reg(reg_dump);
 				continue;
 			}
+			val = xcmd->req.reg.val;
 		}
 		snprintf(reg_dump, 200, "[%#7x] %-47s %#-10x %u\n",
 			addr, name, val, val);
