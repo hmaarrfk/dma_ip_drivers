@@ -1425,6 +1425,7 @@ int qdma_device_read_user_register(struct xlnx_pci_dev *xpdev,
 {
 	struct xlnx_dma_dev *xdev = NULL;
 	int rv = 0;
+	void __iomem *user_bar_regs = NULL;
 
 	if (!xpdev)
 		return -EINVAL;
@@ -1437,15 +1438,15 @@ int qdma_device_read_user_register(struct xlnx_pci_dev *xpdev,
 	}
 
 	/* map the AXI Master Lite bar */
-	rv = xpdev_map_bar(xpdev, &xpdev->user_bar_regs,
+	rv = xpdev_map_bar(xpdev, &user_bar_regs,
 			xdev->conf.bar_num_user);
 	if (rv < 0)
 		return rv;
 
-	*value = readl(xpdev->user_bar_regs + reg_addr);
+	*value = readl(user_bar_regs + reg_addr);
 
 	/* unmap the AXI Master Lite bar after accessing it */
-	xpdev_unmap_bar(xpdev, &xpdev->user_bar_regs);
+	xpdev_unmap_bar(xpdev, &user_bar_regs);
 
 	return 0;
 }
@@ -1455,6 +1456,7 @@ int qdma_device_write_user_register(struct xlnx_pci_dev *xpdev,
 {
 	struct xlnx_dma_dev *xdev = NULL;
 	int rv = 0;
+	void __iomem *user_bar_regs = NULL;
 
 	if (!xpdev)
 		return -EINVAL;
@@ -1467,16 +1469,16 @@ int qdma_device_write_user_register(struct xlnx_pci_dev *xpdev,
 	}
 
 	/* map the AXI Master Lite bar */
-	rv = xpdev_map_bar(xpdev, &xpdev->user_bar_regs,
+	rv = xpdev_map_bar(xpdev, &user_bar_regs,
 			xdev->conf.bar_num_user);
 	if (rv < 0)
 		return rv;
 
 
-	writel(value, xpdev->user_bar_regs + reg_addr);
+	writel(value, user_bar_regs + reg_addr);
 
 	/* unmap the AXI Master Lite bar after accessing it */
-	xpdev_unmap_bar(xpdev, &xpdev->user_bar_regs);
+	xpdev_unmap_bar(xpdev, &user_bar_regs);
 
 	return 0;
 }
@@ -1635,6 +1637,7 @@ static int probe_one(struct pci_dev *pdev, const struct pci_device_id *id)
 	xdev = (struct xlnx_dma_dev *)dev_hndl;
 	qmax = xdev->dev_cap.num_qs;
 	rv = qdma_set_qmax(dev_hndl, -1, qmax);
+	// TODO, set a character device
 	if (!rv)
 		xpdev_qdata_realloc(xpdev, qmax);
 	else
