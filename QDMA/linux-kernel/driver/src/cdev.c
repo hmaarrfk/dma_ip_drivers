@@ -830,3 +830,290 @@ void qdma_cdev_cleanup(void)
 		class_destroy(qdma_class);
 
 }
+
+int char_open(struct inode *inode, struct file *file)
+{
+	struct qdma_user_cdev *qucdev;
+
+	/* pointer to containing structure of the character device inode */
+	qucdev = container_of(inode->i_cdev, struct qdma_user_cdev, cdev);
+	if (qucdev->magic != QDMA_MAGIC_DEVICE) {
+		pr_err("qucdev 0x%p inode 0x%lx, char bar magic mismatch 0x%lx\n",
+			qucdev, inode->i_ino, qucdev->magic);
+		return -EINVAL;
+	}
+	/* create a reference to our char device in the opened file */
+	file->private_data = qucdev;
+
+	return 0;
+}
+
+int qucdev_check(const char *fname, struct qdma_user_cdev *qucdev)
+{
+	struct xlnx_dma_dev *xdev;
+
+	if (!qucdev || qucdev->magic != QDMA_MAGIC_DEVICE) {
+		pr_info("%s, qucdev 0x%p, magic 0x%lx.\n",
+			fname, qucdev, qucdev ? qucdev->magic : 0xFFFFFFFF);
+		return -EINVAL;
+	}
+
+	xdev = qucdev->xdev;
+	if (!xdev || xdev->magic != QDMA_MAGIC_DEVICE) {
+		pr_info("%s, xdev 0x%p, magic 0x%lx.\n",
+			fname, xdev, xdev ? xdev->magic : 0xFFFFFFFF);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+/*
+ * Called when the device goes from used to unused.
+ */
+int char_close(struct inode *inode, struct file *file)
+{
+	struct qdma_user_cdev *qucdev = (struct qdma_user_cdev *)file->private_data;
+	return qucdev_check(__func__, qucdev);
+}
+
+/*
+ * character device file operations for control bus (through control bridge)
+ */
+static ssize_t char_user_read(struct file *file, char __user *buf, size_t count,
+		loff_t *pos)
+{
+	struct qdma_user_cdev *qucdev = (struct qdma_user_cdev *)file->private_data;
+	struct xlnx_pci_dev *xpdev;
+	void __iomem *regs;
+	void __iomem *reg;
+	u32 w;
+	int rv;
+
+	rv = qucdev_check(__func__, qucdev);
+	if (rv < 0)
+		return rv;
+	xpdev = qucdev->xpdev;
+
+	/* only 32-bit aligned and 32-bit multiples */
+	if (count != 4)
+		return -EPROTO;
+	if (*pos & 3)
+		return -EPROTO;
+	/* first address is BAR base plus file position offset */
+	regs = xpdev->user_bar_regs;
+	reg = regs + *pos;
+	//w = read_register(reg);
+	w = ioread32(reg);
+#ifdef DEBUG
+	pr_info("%s(@%p, count=%ld, pos=%d) value = 0x%08x\n",
+			__func__, reg, (long)count, (int)*pos, w);
+#endif
+	rv = copy_to_user(buf, &w, 4);
+	if (rv) {
+#ifdef DEBUG
+		pr_info("Copy to userspace failed but continuing\n");
+#endif
+	}
+
+	*pos += count;
+	return count;
+}
+
+static ssize_t char_user_write(struct file *file, const char __user *buf,
+			size_t count, loff_t *pos)
+{
+	struct qdma_user_cdev *qucdev = (struct qdma_user_cdev *)file->private_data;
+	struct xlnx_pci_dev *xpdev;
+	void __iomem *regs;
+	void __iomem *reg;
+	u32 w;
+	int rv;
+
+	rv = qucdev_check(__func__, qucdev);
+	if (rv < 0)
+		return rv;
+	xpdev = qucdev->xpdev;
+
+	/* only 32-bit aligned and 32-bit multiples */
+	if (count != 4)
+		return -EPROTO;
+	if (*pos & 3)
+		return -EPROTO;
+
+	/* first address is BAR base plus file position offset */
+	regs = xpdev->user_bar_regs;
+	reg = regs + *pos;
+	rv = copy_from_user(&w, buf, 4);
+	if (rv) {
+#ifdef DEBUG
+		pr_info("copy from user failed %d/4, but continuing.\n", rv);
+#endif
+	}
+
+
+#ifdef DEBUG
+	pr_info("%s(0x%08x @%p, count=%ld, pos=%d)\n",
+			__func__, w, reg, (long)count, (int)*pos);
+#endif
+	iowrite32(w, reg);
+	*pos += count;
+	return count;
+}
+
+
+/* maps the PCIe BAR into user space for memory-like access using mmap() */
+int bridge_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	struct qdma_user_cdev *qucdev = (struct qdma_user_cdev *)file->private_data;
+	struct xlnx_pci_dev *xpdev;
+	unsigned long off;
+	unsigned long phys;
+	unsigned long vsize;
+	unsigned long psize;
+	int rv;
+
+	rv = qucdev_check(__func__, qucdev);
+	if (rv < 0)
+		return rv;
+	xpdev = qucdev->xpdev;
+
+	off = vma->vm_pgoff << PAGE_SHIFT;
+	/* BAR physical address */
+	phys = pci_resource_start(xpdev->pdev, qucdev->bar) + off;
+	vsize = vma->vm_end - vma->vm_start;
+	/* complete resource */
+	psize = pci_resource_end(xpdev->pdev, qucdev->bar) -
+		pci_resource_start(xpdev->pdev, qucdev->bar) + 1 - off;
+
+	pr_debug("mmap(): qucdev = 0x%08lx\n", (unsigned long)qucdev);
+	pr_debug("mmap(): cdev->bar = %d\n", qucdev->bar);
+	pr_debug("mmap(): xpdev = 0x%p\n", xpdev);
+	pr_debug("mmap(): pci_dev = 0x%08lx\n", (unsigned long)xpdev->pdev);
+
+	pr_debug("off = 0x%lx\n", off);
+	pr_debug("start = 0x%llx\n",
+		(unsigned long long)pci_resource_start(xpdev->pdev, qucdev->bar));
+	pr_debug("phys = 0x%lx\n", phys);
+    pr_debug("vsize = 0x%lx\n", vsize);
+    pr_debug("psize = 0x%lx\n", psize);
+	if (vsize > psize)
+		return -EINVAL;
+	/*
+	 * pages must not be cached as this would result in cache line sized
+	 * accesses to the end point
+	 */
+	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+	/*
+	 * prevent touching the pages (byte access) for swap-in,
+	 * and prevent the pages from being swapped out
+	 */
+	vma->vm_flags |= (VM_IO | VM_DONTEXPAND | VM_DONTDUMP);
+	/* make MMIO accessible to user space */
+	rv = io_remap_pfn_range(vma, vma->vm_start, phys >> PAGE_SHIFT,
+			vsize, vma->vm_page_prot);
+	pr_debug("vma=0x%p, vma->vm_flags=0x%lx, vma->vm_start=0x%lx, phys=0x%lx, size=%lu = %d\n",
+		vma, vma->vm_flags, vma->vm_start, phys >> PAGE_SHIFT, vsize, rv);
+	if (rv)
+		return -EAGAIN;
+	return 0;
+}
+
+static const struct file_operations ctrl_fops = {
+	.owner = THIS_MODULE,
+	.open = char_open,
+	.release = char_close,
+	.read = char_user_read,
+	.write = char_user_write,
+	.mmap = bridge_mmap,
+};
+
+void qdma_qucdev_destroy(struct qdma_user_cdev *qucdev)
+{
+	if (!qucdev) {
+		pr_err("qucdev is NULL.\n");
+		return;
+	}
+	if (qucdev->magic != QDMA_MAGIC_DEVICE){
+		pr_err("qucdev magic did not match. Not destroying %p\n", qucdev);
+		return;
+	}
+	pr_debug("destroying cdev %p", qucdev);
+
+	if (qucdev->sys_device)
+		device_destroy(qdma_class, qucdev->cdevno);
+	qucdev->sys_device = NULL;
+
+	cdev_del(&qucdev->cdev);
+
+	qucdev->magic = 0;
+	qucdev->xpdev = NULL;
+	qucdev->xdev = NULL;
+	qucdev->cdevno = 0;
+	qucdev->cdev.owner = NULL;
+	qucdev->bar = 0;
+}
+
+int create_qucdev(struct xlnx_pci_dev *xpdev, struct qdma_user_cdev *qucdev){
+	int rv;
+	u32 bdf;
+	struct xlnx_dma_dev *xdev;
+	if (xpdev == NULL){
+		pr_err("xpdev cannot be NULL\n");
+		return -EINVAL;
+	}
+
+	xdev = (struct xlnx_dma_dev *)xpdev->dev_hndl;
+	if (xdev == NULL) {
+		pr_err("xdev cannot be NULL\n");
+		return -EINVAL;
+	}
+
+	if (xdev->conf.bar_num_user < 0) {
+		pr_err("xpdev cannot create a user dev when bar does not exist.\n");
+		return -EINVAL;
+	}
+	bdf = xdev->conf.bdf;
+	qucdev->magic = QDMA_MAGIC_DEVICE;
+	spin_lock_init(&qucdev->lock);
+	qucdev->xpdev = xpdev;
+	qucdev->xdev = xdev;
+	qucdev->cdevno = MKDEV(xpdev->cdev_cb.cdev_major, QDMA_MINOR_USER);
+	qucdev->bar = xdev->conf.bar_num_user;
+	qucdev->sys_device = NULL;
+	pr_debug("creating qdma%05x-user-%d at %p\n", bdf, qucdev->bar, qucdev);
+	rv = kobject_set_name(&qucdev->cdev.kobj, "qdma%05x-user-%d", bdf, qucdev->bar);
+	if (rv) {
+		pr_err("%s: failed %d.\n", __func__, rv);
+        return rv;
+    }
+    cdev_init(&qucdev->cdev, &ctrl_fops);
+
+	/* bring character device live */
+	rv = cdev_add(&qucdev->cdev, qucdev->cdevno, 1);
+	if (rv < 0) {
+		pr_err("cdev_add failed %d, qdma%05x-user-%d.\n", rv, bdf, qucdev->bar);
+		goto err_out;
+	}
+	if (qdma_class) {
+		qucdev->sys_device = device_create(qdma_class, &xpdev->pdev->dev,
+			qucdev->cdevno, NULL, "qdma%05x-user-%d", bdf, qucdev->bar);
+		if (qucdev->sys_device == NULL) {
+			pr_err("device_create(qdma%05x_user) failed\n", bdf);
+			rv = -1;
+			goto del_cdev;
+		}
+	}
+	return 0;
+del_cdev:
+	cdev_del(&qucdev->cdev);
+err_out:
+	qucdev->magic = 0;
+	qucdev->xpdev = NULL;
+	qucdev->xdev = NULL;
+	qucdev->cdevno = 0;
+	qucdev->cdev.owner = NULL;
+	qucdev->bar = 0;
+	qucdev->sys_device = NULL;
+	return rv;
+}

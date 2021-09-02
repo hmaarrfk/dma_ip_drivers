@@ -90,6 +90,7 @@ struct xlnx_pci_dev {
 	spinlock_t cdev_lock;		/**< character device lock*/
 	unsigned int qmax;		/**< max number of queues for device*/
 	unsigned int idx;		/**< device index*/
+	struct qdma_user_cdev user_cdev;
 	void __iomem *user_bar_regs;	/**< PCIe AXI Master Lite bar */
 	void __iomem *bypass_bar_regs;  /**< PCIe AXI Bridge Master bar*/
 	struct xlnx_qdata *qdata;	/**< queue data*/
