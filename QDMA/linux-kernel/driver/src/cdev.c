@@ -70,6 +70,7 @@ struct cdev_async_io {
 
 enum qdma_cdev_ioctl_cmd {
 	QDMA_CDEV_IOCTL_NO_MEMCPY,
+	QDMA_CDEV_IOCTL_TIMEOUT_MS,
 	QDMA_CDEV_IOCTL_CMDS
 };
 
@@ -209,13 +210,15 @@ static long cdev_gen_ioctl(struct file *file, unsigned int cmd,
 	case QDMA_CDEV_IOCTL_NO_MEMCPY:
 		get_user(xcdev->no_memcpy, (unsigned char *)arg);
 		return 0;
+	case QDMA_CDEV_IOCTL_TIMEOUT_MS:
+		get_user(xcdev->timeout_ms, (unsigned long *)arg);
+		return 0;
 	default:
 		break;
 	}
 	if (xcdev->fp_ioctl_extra)
 		return xcdev->fp_ioctl_extra(xcdev, cmd, arg);
-
-	pr_err("%s ioctl NOT supported.\n", xcdev->name);
+	pr_err("%s ioctl %u NOT supported.\n", xcdev->name, cmd);
 	return -EINVAL;
 }
 
@@ -403,7 +406,7 @@ static ssize_t cdev_gen_read_write(struct file *file, char __user *buf,
 	req->udd_len = 0;
 	req->ep_addr = (u64)*pos;
 	req->count = count;
-	req->timeout_ms = 10 * 1000;	/* 10 seconds */
+	req->timeout_ms = xcdev->timeout_ms;
 	req->fp_done = NULL;		/* blocking */
 	req->h2c_eot = 1;		/* set to 1 for STM tests */
 
@@ -478,7 +481,7 @@ static ssize_t cdev_aio_write(struct kiocb *iocb, const struct iovec *io,
 		caio->reqv[i]->ep_addr = (u64)pos;
 		caio->reqv[i]->no_memcpy = xcdev->no_memcpy ? 1 : 0;
 		caio->reqv[i]->count = io->iov_len;
-		caio->reqv[i]->timeout_ms = 10 * 1000;	/* 10 seconds */
+		caio->reqv[i]->timeout_ms = xcdev->timeout_ms;
 		caio->reqv[i]->fp_done = qdma_req_completed;
 
 	}
@@ -551,7 +554,7 @@ static ssize_t cdev_aio_read(struct kiocb *iocb, const struct iovec *io,
 		caio->reqv[i]->ep_addr = (u64)pos;
 		caio->reqv[i]->no_memcpy = xcdev->no_memcpy ? 1 : 0;
 		caio->reqv[i]->count = io->iov_len;
-		caio->reqv[i]->timeout_ms = 10 * 1000;	/* 10 seconds */
+		caio->reqv[i]->timeout_ms = xcdev->timeout_ms;
 		caio->reqv[i]->fp_done = qdma_req_completed;
 	}
 	if (i > 0) {
@@ -656,6 +659,8 @@ int qdma_cdev_create(struct qdma_cdev_cb *xcb, struct pci_dev *pdev,
 	*priv_data = qhndl;
 	xcdev->dir_init = (1 << qconf->q_type);
 	strcpy(xcdev->name, qconf->name);
+	/* 10 second timeout by default for compatibility with Xilinx's defaults*/
+	xcdev->timeout_ms = 10 * 1000;
 
 	xcdev->minor = minor;
 	if (xcdev->minor >= xcb->cdev_minor_cnt) {

@@ -77,6 +77,8 @@ struct qdma_cdev {
 	unsigned short dir_init;
 	/* flag to indicate if memcpy is required */
 	unsigned char no_memcpy;
+	/* timeout in milliseconds for operations */
+	unsigned long timeout_ms;
 	/** call back function for open a device */
 	int (*fp_open_extra)(struct qdma_cdev *xcdev);
 	/** call back function for close a device */
