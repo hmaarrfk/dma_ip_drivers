@@ -166,10 +166,12 @@ void descq_flq_free_page_resource(struct qdma_descq *descq)
 	unsigned char pg_order = flq->desc_pg_order;
 	int i;
 
-	for (i = 0; i < flq->num_pages; i++, pg_sdesc++)
-		flq_free_page_one(pg_sdesc, dev,
-				pg_order, flq->desc_pg_shift);
-
+	/* pg_sdesc can be NULL if this function is called because alloc is complete */
+	if(pg_sdesc) {
+		for (i = 0; i < flq->num_pages; i++, pg_sdesc++)
+			flq_free_page_one(pg_sdesc, dev,
+					pg_order, flq->desc_pg_shift);
+	}
 	kfree(flq->pg_sdesc);
 	flq->pg_sdesc = NULL;
 
@@ -183,10 +185,10 @@ void descq_flq_free_resource(struct qdma_descq *descq)
 	struct qdma_c2h_desc *desc = flq->desc;
 	int i;
 
-	/* It can never be null beyond this */
+	/* sdesc may be NULL if failure occured during desc_flq_alloc_resource */
 	if (!sdesc) {
-		pr_err("%s: sdesc is Invalid",
-				__func__);
+		pr_debug("%s: sdesc is Invalid",
+				 __func__);
 		return;
 	}
 
@@ -284,10 +286,11 @@ int descq_flq_alloc_resource(struct qdma_descq *descq)
 				GFP_KERNEL, node);
 
 	if (!pg_sdesc) {
-		pr_err("%s: OOM, sz %d * %ld.\n",
-				__func__,
+		pr_err("%s@%d: OOM, sz %d * %ld.\n",
+				__func__, __LINE__,
 				flq->num_pages,
 				(sizeof(struct qdma_sw_pg_sg)));
+		flq->num_pages = 0;
 		return -ENOMEM;
 	}
 	flq->pg_sdesc = pg_sdesc;
@@ -298,6 +301,7 @@ int descq_flq_alloc_resource(struct qdma_descq *descq)
 				flq->desc_pg_order, GFP_KERNEL);
 		if (rv < 0) {
 			descq_flq_free_page_resource(descq);
+			flq->num_pages = 0;
 			return rv;
 		}
 	}
@@ -306,12 +310,13 @@ int descq_flq_alloc_resource(struct qdma_descq *descq)
 					  sizeof(struct qdma_sdesc_info)),
 				GFP_KERNEL, node);
 	if (!sdesc) {
-		pr_err("%s: OOM, sz %d * %ld.\n",
-				__func__,
+		pr_err("%s@%d: OOM, sz %d * %ld.\n",
+				__func__, __LINE__,
 				flq->size,
 				((sizeof(struct qdma_sw_sg) +
 				sizeof(struct qdma_sdesc_info))));
 		descq_flq_free_page_resource(descq);
+		flq->num_pages = 0;
 		return -ENOMEM;
 	}
 
@@ -337,6 +342,7 @@ int descq_flq_alloc_resource(struct qdma_descq *descq)
 		if (rv < 0) {
 			descq_flq_free_resource(descq);
 			descq_flq_free_page_resource(descq);
+			flq->num_pages = 0;
 			return rv;
 		}
 	}
