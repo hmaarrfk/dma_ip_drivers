@@ -2191,7 +2191,10 @@ static int qdma_indirect_reg_invalidate(void *dev_hndl,
 		enum ind_ctxt_cmd_sel sel, uint16_t hw_qid)
 {
 	union qdma_ind_ctxt_cmd cmd;
-
+	// Since we are trying to invalidate the context, this should happen quickly.
+	// This may happen when a device has been powered off accidentally
+	// The default timeout is 500 ms
+	const uint32_t timeout_us = 5 * 1000;
 	qdma_reg_access_lock(dev_hndl);
 
 	/* set command register */
@@ -2205,7 +2208,7 @@ static int qdma_indirect_reg_invalidate(void *dev_hndl,
 	if (hw_monitor_reg(dev_hndl, QDMA_OFFSET_IND_CTXT_CMD,
 			QDMA_IND_CTXT_CMD_BUSY_MASK, 0,
 			QDMA_REG_POLL_DFLT_INTERVAL_US,
-			QDMA_REG_POLL_DFLT_TIMEOUT_US)) {
+			timeout_us)) {
 		qdma_reg_access_release(dev_hndl);
 		qdma_log_error("%s: hw_monitor_reg failed with err:%d\n",
 						__func__,
