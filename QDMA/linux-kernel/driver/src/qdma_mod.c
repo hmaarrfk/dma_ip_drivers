@@ -1423,29 +1423,15 @@ static void xpdev_unmap_bar(struct xlnx_pci_dev *xpdev, void __iomem **regs)
 int qdma_device_read_user_register(struct xlnx_pci_dev *xpdev,
 		u32 reg_addr, u32 *value)
 {
-	struct xlnx_dma_dev *xdev = NULL;
-	int rv = 0;
-
 	if (!xpdev)
 		return -EINVAL;
 
-	xdev = (struct xlnx_dma_dev *)(xpdev->dev_hndl);
-
-	if (xdev->conf.bar_num_user < 0) {
+	if (xpdev->user_bar_regs == NULL) {
 		pr_err("AXI Master Lite bar is not present\n");
 		return -EINVAL;
 	}
 
-	/* map the AXI Master Lite bar */
-	rv = xpdev_map_bar(xpdev, &xpdev->user_bar_regs,
-			xdev->conf.bar_num_user);
-	if (rv < 0)
-		return rv;
-
 	*value = readl(xpdev->user_bar_regs + reg_addr);
-
-	/* unmap the AXI Master Lite bar after accessing it */
-	xpdev_unmap_bar(xpdev, &xpdev->user_bar_regs);
 
 	return 0;
 }
@@ -1453,30 +1439,15 @@ int qdma_device_read_user_register(struct xlnx_pci_dev *xpdev,
 int qdma_device_write_user_register(struct xlnx_pci_dev *xpdev,
 		u32 reg_addr, u32 value)
 {
-	struct xlnx_dma_dev *xdev = NULL;
-	int rv = 0;
-
 	if (!xpdev)
 		return -EINVAL;
 
-	xdev = (struct xlnx_dma_dev *)(xpdev->dev_hndl);
-
-	if (xdev->conf.bar_num_user < 0) {
+	if (xpdev->user_bar_regs == NULL) {
 		pr_err("AXI Master Lite bar is not present\n");
 		return -EINVAL;
 	}
 
-	/* map the AXI Master Lite bar */
-	rv = xpdev_map_bar(xpdev, &xpdev->user_bar_regs,
-			xdev->conf.bar_num_user);
-	if (rv < 0)
-		return rv;
-
-
 	writel(value, xpdev->user_bar_regs + reg_addr);
-
-	/* unmap the AXI Master Lite bar after accessing it */
-	xpdev_unmap_bar(xpdev, &xpdev->user_bar_regs);
 
 	return 0;
 }
@@ -1484,29 +1455,15 @@ int qdma_device_write_user_register(struct xlnx_pci_dev *xpdev,
 int qdma_device_read_bypass_register(struct xlnx_pci_dev *xpdev,
 		u32 reg_addr, u32 *value)
 {
-	struct xlnx_dma_dev *xdev = NULL;
-	int rv = 0;
-
 	if (!xpdev)
 		return -EINVAL;
 
-	xdev = (struct xlnx_dma_dev *)(xpdev->dev_hndl);
-
-	if (xdev->conf.bar_num_bypass < 0) {
+	if (xpdev->bypass_bar_regs == NULL) {
 		pr_err("AXI Bridge Master bar is not present\n");
 		return -EINVAL;
 	}
 
-	/* map the AXI Bridge Master bar */
-	rv = xpdev_map_bar(xpdev, &xpdev->bypass_bar_regs,
-			xdev->conf.bar_num_bypass);
-	if (rv < 0)
-		return rv;
-
 	*value = readl(xpdev->bypass_bar_regs + reg_addr);
-
-	/* unmap the AXI Bridge Master bar after accessing it */
-	xpdev_unmap_bar(xpdev, &xpdev->bypass_bar_regs);
 
 	return 0;
 }
@@ -1514,29 +1471,15 @@ int qdma_device_read_bypass_register(struct xlnx_pci_dev *xpdev,
 int qdma_device_write_bypass_register(struct xlnx_pci_dev *xpdev,
 		u32 reg_addr, u32 value)
 {
-	struct xlnx_dma_dev *xdev = NULL;
-	int rv = 0;
-
 	if (!xpdev)
 		return -EINVAL;
 
-	xdev = (struct xlnx_dma_dev *)(xpdev->dev_hndl);
-
-	if (xdev->conf.bar_num_bypass < 0) {
+	if (xpdev->bypass_bar_regs == NULL) {
 		pr_err("AXI Bridge Master bar is not present\n");
 		return -EINVAL;
 	}
 
-	/* map the AXI Bridge Master bar */
-	rv = xpdev_map_bar(xpdev, &xpdev->bypass_bar_regs,
-			xdev->conf.bar_num_bypass);
-	if (rv < 0)
-		return rv;
-
 	writel(value, xpdev->bypass_bar_regs + reg_addr);
-
-	/* unmap the AXI Bridge Master bar after accessing it */
-	xpdev_unmap_bar(xpdev, &xpdev->bypass_bar_regs);
 
 	return 0;
 }
@@ -1546,6 +1489,8 @@ static int probe_one(struct pci_dev *pdev, const struct pci_device_id *id)
 	struct qdma_dev_conf conf;
 	struct xlnx_pci_dev *xpdev = NULL;
 	unsigned long dev_hndl;
+	struct xlnx_dma_dev *xdev;
+	unsigned int qmax;
 	int rv;
 #ifdef __x86_64__
 	pr_info("%s: func 0x%x, p/v %d/%d,0x%p.\n",
@@ -1628,9 +1573,45 @@ static int probe_one(struct pci_dev *pdev, const struct pci_device_id *id)
 
 	dev_set_drvdata(&pdev->dev, xpdev);
 
-	return 0;
+	// RAMONA OPTICS ADDITION
+	xdev = (struct xlnx_dma_dev *)xpdev->dev_hndl;
+	if (xdev->conf.bar_num_user >= 0) {
+		rv = xpdev_map_bar(xpdev, &xpdev->user_bar_regs, xdev->conf.bar_num_user);
+		if (rv < 0)
+			goto close_device;
+		rv = create_qucdev(xpdev, &xpdev->user_cdev);
+		if (rv)
+			goto close_device;
+	}
+	if (xdev->conf.bar_num_bypass >= 0) {
+		/* map the AXI Bridge Master bar */
+		rv = xpdev_map_bar(xpdev, &xpdev->bypass_bar_regs, xdev->conf.bar_num_bypass);
+		if (rv < 0)
+			goto close_bypass_map_fail;
+	}
 
+	// Automatically set the number of queues to the maximum number of queues
+	qmax = xdev->dev_cap.num_qs;
+	rv = qdma_set_qmax(dev_hndl, -1, qmax);
+	if (rv)
+		goto close_set_qmax_fail;
+	rv = xpdev_qdata_realloc(xpdev, qmax);
+	if (rv)
+		goto close_qdata_realloc_fail;
+
+	return 0;
+close_qdata_realloc_fail:
+	qdma_set_qmax(dev_hndl, -1, 0);
+close_set_qmax_fail:
+close_bypass_map_fail:
+	if (xdev->conf.bar_num_user >= 0) {
+		qdma_qucdev_destroy(&xpdev->user_cdev);
+	}
 close_device:
+	if (xpdev->user_bar_regs != NULL)
+		xpdev_unmap_bar(xpdev, &xpdev->user_bar_regs);
+	if (xpdev->bypass_bar_regs != NULL)
+		xpdev_unmap_bar(xpdev, &xpdev->bypass_bar_regs);
 	qdma_device_close(pdev, dev_hndl);
 
 	if (xpdev)
@@ -1641,6 +1622,7 @@ close_device:
 
 static void xpdev_device_cleanup(struct xlnx_pci_dev *xpdev)
 {
+	struct xlnx_dma_dev *xdev = (struct xlnx_dma_dev *)xpdev->dev_hndl;
 	struct xlnx_qdata *qdata = xpdev->qdata;
 	struct xlnx_qdata *qmax = qdata + (xpdev->qmax * 2); /* h2c and c2h */
 
@@ -1658,6 +1640,14 @@ static void xpdev_device_cleanup(struct xlnx_pci_dev *xpdev)
 		memset(qdata, 0, sizeof(*qdata));
 	}
 	spin_unlock(&xpdev->cdev_lock);
+
+	if (xdev->conf.bar_num_user >= 0) {
+		qdma_qucdev_destroy(&xpdev->user_cdev);
+	}
+	if (xpdev->user_bar_regs != NULL)
+		xpdev_unmap_bar(xpdev, &xpdev->user_bar_regs);
+	if (xpdev->bypass_bar_regs != NULL)
+		xpdev_unmap_bar(xpdev, &xpdev->bypass_bar_regs);
 }
 
 static void remove_one(struct pci_dev *pdev)
@@ -1675,15 +1665,15 @@ static void remove_one(struct pci_dev *pdev)
 	pr_info("%s pdev 0x%p, xdev 0x%p, hndl 0x%lx, qdma%05x.\n",
 		dev_name(&pdev->dev), pdev, xpdev, xpdev->dev_hndl, xpdev->idx);
 
+	qdma_cdev_device_cleanup(&xpdev->cdev_cb);
+
+	xpdev_device_cleanup(xpdev);
+
 	if (xdev->conf.master_pf)
 		sysfs_remove_group(&pdev->dev.kobj,
 				&pci_master_device_attr_group);
 	else
 		sysfs_remove_group(&pdev->dev.kobj, &pci_device_attr_group);
-
-	qdma_cdev_device_cleanup(&xpdev->cdev_cb);
-
-	xpdev_device_cleanup(xpdev);
 
 	qdma_device_close(pdev, xpdev->dev_hndl);
 

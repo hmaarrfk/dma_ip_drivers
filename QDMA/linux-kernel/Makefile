@@ -48,16 +48,18 @@ else # bundled install
 	docs_install_path ?= $(install_path)/doc
 endif
 
+udev_rules_path ?= /etc/udev/rules.d
+
 .PHONY: eval.mak
 
 .PHONY: default
 default: apps driver post
 
 .PHONY: install
-install: install-apps install-dev install-mods
+install: install-apps install-udev install-dev install-mods
 
 .PHONY: uninstall
-uninstall: uninstall-apps uninstall-dev uninstall-mods
+uninstall: uninstall-apps uninstall-udev uninstall-dev uninstall-mods
 
 .PHONY: apps
 apps:
@@ -102,6 +104,18 @@ install-mods:
 	@depmod -a || true
 
 
+.PHONY: install-udev
+install-udev:
+	@mkdir -p -m 755 $(udev_rules_path)
+	@install -v -m 755 udev/50-qdma.rules $(udev_rules_path)
+	@echo "reloadeing udev rules:"
+	@udevadm control --reload-rules
+	@udevadm trigger
+
+.PHONY: uninstall-udev
+uninstall-udev:
+	@/bin/rm -f $(udev_rules_path)/50-qdma.rules
+
 .PHONY: install-apps
 install-apps:
 	@echo "installing apps to $(apps_install_path) ..."
@@ -114,13 +128,13 @@ install-apps:
 	@install -v -m 755 bin/dma-latency $(apps_install_path)
 	@echo "MAN PAGES:"
 	@mkdir -p -m 755 $(docs_install_path)
-	@install -v -m 644 docs/dmactl.8.gz $(docs_install_path)
+	@install -v -m 644 docs/dma-ctl.8.gz $(docs_install_path)
 
 .PHONY: install-dev
 install-dev:
 	@echo "installing development headers to $(dev_install_path) ..."
 	@mkdir -p -m 755 $(dev_install_path)
-	@install -v -m 755 driver/include/* $(dev_install_path)
+	@install -v -m 755 apps/include/* $(dev_install_path)
 
 .PHONY: uninstall-mods
 uninstall-mods:

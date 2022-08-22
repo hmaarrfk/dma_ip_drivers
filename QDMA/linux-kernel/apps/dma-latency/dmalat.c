@@ -22,7 +22,7 @@
 #include <errno.h>
 #include <error.h>
 #include <sys/ioctl.h>
-#include </usr/include/pthread.h>
+#include <pthread.h>
 #include "dmautils.h"
 #include "qdma_nl.h"
 
@@ -871,7 +871,7 @@ static void parse_config_file(const char *cfg_fname)
 		printf("Could not open %s\n", rng_sz_path);
 		exit(1);
 	}
-	ret = read(rng_sz_fd, &rng_sz[1], 100);
+	ret = read(rng_sz_fd, &rng_sz[1], 100 - 1);
 	if (ret < 0) {
 		printf("Error: Could not read the file\n");
 		exit(1);

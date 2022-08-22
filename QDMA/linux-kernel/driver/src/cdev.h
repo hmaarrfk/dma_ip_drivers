@@ -34,7 +34,20 @@
 /** QDMA character device class name */
 #define QDMA_CDEV_CLASS_NAME  DRV_MODULE_NAME
 /** QDMA character device max minor number*/
-#define QDMA_MINOR_MAX (2048)
+/** Up to 2048 Queues + 1 User bar */
+#define QDMA_MINOR_MAX (2048 + 1)
+#define QDMA_MINOR_USER 2048
+
+struct qdma_user_cdev {
+	unsigned long magic; /* structure ID for sanity */
+	struct xlnx_pci_dev *xpdev;
+	struct xlnx_dma_dev *xdev;
+	dev_t cdevno;			/* character device major:minor */
+	struct cdev cdev;		/* character device embedded struct */
+	int bar;			    /* PCIe BAR for HW access, if needed */
+	struct device *sys_device;	/* sysfs device */
+	spinlock_t lock;
+};
 
 /* per pci device control */
 /**
@@ -77,6 +90,8 @@ struct qdma_cdev {
 	unsigned short dir_init;
 	/* flag to indicate if memcpy is required */
 	unsigned char no_memcpy;
+	/* timeout in milliseconds for operations */
+	unsigned long timeout_ms;
 	/** call back function for open a device */
 	int (*fp_open_extra)(struct qdma_cdev *xcdev);
 	/** call back function for close a device */
@@ -107,6 +122,8 @@ struct qdma_io_cb {
 	unsigned int pages_nr;
 	/** scatter gather list */
 	struct qdma_sw_sg *sgl;
+	/** if true then used vmalloc() and need vfree() */
+	int vmalloc_used;
 	/** pages allocated to accommodate the scatter gather list */
 	struct page **pages;
 	/** qdma request */
@@ -179,5 +196,8 @@ void qdma_cdev_cleanup(void);
  *
  *****************************************************************************/
 int qdma_cdev_init(void);
+
+int create_qucdev(struct xlnx_pci_dev *xpdev, struct qdma_user_cdev *qucdev);
+void qdma_qucdev_destroy(struct qdma_user_cdev *qucdev);
 
 #endif /* ifndef __QDMA_CDEV_H__ */

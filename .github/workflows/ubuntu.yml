@@ -24,15 +24,13 @@ jobs:
             os: "ubuntu-20.04"
             mainline: false
           # https://kernel.ubuntu.com/~kernel-ppa/mainline/v5.17.15/amd64/
-          # Known to fail with Xilinx's driver
-          # - KERNEL_VERSION_BUILD: "5.17.15-051715.202206141358"
-          #   os: "ubuntu-22.04"
-          #   mainline: true
+          - KERNEL_VERSION_BUILD: "5.17.15-051715.202206141358"
+            os: "ubuntu-22.04"
+            mainline: true
           # https://kernel.ubuntu.com/~kernel-ppa/mainline/v5.18.8/amd64/
-          # Known to fail with Xilinx's driver
-          # - KERNEL_VERSION_BUILD: "5.18.8-051808.202206290850"
-          #   os: "ubuntu-22.04"
-          #   mainline: true
+          - KERNEL_VERSION_BUILD: "5.18.8-051808.202206290850"
+            os: "ubuntu-22.04"
+            mainline: true
     env:
       KERNEL_VERSION_BUILD: ${{ matrix.KERNEL_VERSION_BUILD }}
     runs-on: ${{ matrix.os }}

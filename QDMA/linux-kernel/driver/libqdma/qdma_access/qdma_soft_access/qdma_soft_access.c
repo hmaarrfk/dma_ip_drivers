@@ -186,7 +186,7 @@ static struct xreg_info qdma_config_regs[] = {
 		0x27C, 1,  0, 0, 0, 0,
 		QDMA_MM_ST_MODE, QDMA_REG_READ_PF_VF, 0, NULL},
 	{"GLBL_INTERRUPT_CFG",
-		0x288, 1, 0, 0, 0, 0,
+		0x2C4, 1, 0, 0, 0, 0,
 		QDMA_MM_ST_MODE, QDMA_REG_READ_PF_VF, 0, NULL},
 
 	/* QDMA_TRQ_SEL_FMAP (0x00400 - 0x7FC) */
@@ -2191,7 +2191,10 @@ static int qdma_indirect_reg_invalidate(void *dev_hndl,
 		enum ind_ctxt_cmd_sel sel, uint16_t hw_qid)
 {
 	union qdma_ind_ctxt_cmd cmd;
-
+	// Since we are trying to invalidate the context, this should happen quickly.
+	// This may happen when a device has been powered off accidentally
+	// The default timeout is 500 ms
+	const uint32_t timeout_us = 5 * 1000;
 	qdma_reg_access_lock(dev_hndl);
 
 	/* set command register */
@@ -2205,7 +2208,7 @@ static int qdma_indirect_reg_invalidate(void *dev_hndl,
 	if (hw_monitor_reg(dev_hndl, QDMA_OFFSET_IND_CTXT_CMD,
 			QDMA_IND_CTXT_CMD_BUSY_MASK, 0,
 			QDMA_REG_POLL_DFLT_INTERVAL_US,
-			QDMA_REG_POLL_DFLT_TIMEOUT_US)) {
+			timeout_us)) {
 		qdma_reg_access_release(dev_hndl);
 		qdma_log_error("%s: hw_monitor_reg failed with err:%d\n",
 						__func__,
@@ -4114,8 +4117,15 @@ int qdma_get_user_bar(void *dev_hndl, uint8_t is_vf,
 int qdma_get_device_attributes(void *dev_hndl,
 		struct qdma_dev_attributes *dev_info)
 {
+	struct qdma_hw_version_info version_info;
+	int rv;
 	uint8_t count = 0;
 	uint32_t reg_val = 0;
+#ifndef __QDMA_VF__
+	const uint8_t is_vf = 0;
+#else
+	const uint8_t is_vf = 1;
+#endif
 
 	if (!dev_hndl) {
 		qdma_log_error("%s: dev_handle is NULL, err:%d\n",
@@ -4127,6 +4137,21 @@ int qdma_get_device_attributes(void *dev_hndl,
 		qdma_log_error("%s: dev_info is NULL, err:%d\n",
 				__func__, -QDMA_ERR_INV_PARAM);
 		return -QDMA_ERR_INV_PARAM;
+	}
+
+	/* Ramona Optics Edit 2021/08/26
+	 * Decoding the capabilities seems to be dependent on the version
+	 * of QDMA that was used to create the IP.
+	 * In 2019.2 it seems that the capabilities of the QDMA are not
+	 * correctly reported in the register GLBL2_CHNL_STRM_0
+	 *
+	 * As such, when we detect that version, we choose a different path
+	 * to decode the capabilities of the FPGA as described in
+	 * https://gitlab.com/ramonaoptics/mcam/fpga_logic/-/issues/84
+	 */
+	rv = qdma_get_version(dev_hndl, is_vf,  &version_info);
+	if (rv) {
+		return rv;
 	}
 
 	/* number of PFs */
@@ -4152,11 +4177,22 @@ int qdma_get_device_attributes(void *dev_hndl,
 	dev_info->mm_cmpt_en  = FIELD_GET(QDMA_GLBL2_MM_CMPT_EN_MASK, reg_val);
 
 	/* ST/MM enabled? */
-	reg_val = qdma_reg_read(dev_hndl, QDMA_OFFSET_GLBL2_CHANNEL_MDMA);
-	dev_info->mm_en = (FIELD_GET(QDMA_GLBL2_MM_C2H_MASK, reg_val)
-			&& FIELD_GET(QDMA_GLBL2_MM_H2C_MASK, reg_val)) ? 1 : 0;
+	reg_val = qdma_reg_read(dev_hndl, QDMA_OFFSET_GLBL2_CHANNEL_STRM);
 	dev_info->st_en = (FIELD_GET(QDMA_GLBL2_ST_C2H_MASK, reg_val)
-			&& FIELD_GET(QDMA_GLBL2_ST_H2C_MASK, reg_val)) ? 1 : 0;
+		&& FIELD_GET(QDMA_GLBL2_ST_H2C_MASK, reg_val)) ? 1 : 0;
+	if (version_info.vivado_release == QDMA_VIVADO_2019_2 ) {
+		// This is a debugging register that allows one to read the
+		// side-channel registers for the AXI MM interface.
+		// It is pretty rare that this will be all 0s if the interface is
+		// enabled. But it seems to be 0 if the interface is disabled.
+		// See https://www.xilinx.com/support/documentation/ip_documentation/qdma/v3_0/pg302-qdma.pdf
+		// Table 99 on Page 125.
+		reg_val = qdma_reg_read(dev_hndl, QDMA_OFFSET_GLBL2_DBG_AXIMM_WR0);
+		dev_info->mm_en = reg_val != 0 ? 1 : 0;
+	} else {
+		dev_info->mm_en = (FIELD_GET(QDMA_GLBL2_MM_C2H_MASK, reg_val)
+				&& FIELD_GET(QDMA_GLBL2_MM_H2C_MASK, reg_val)) ? 1 : 0;
+	}
 
 	/* num of mm channels */
 	/* TODO : Register not yet defined for this. Hard coding it to 1.*/

@@ -1178,8 +1178,10 @@ void qdma_descq_free_resource(struct qdma_descq *descq)
 		if (descq->conf.st && (descq->conf.q_type == Q_C2H)) {
 			descq_flq_free_resource(descq);
 			descq_flq_free_page_resource(descq);
-		} else
+		} else {
 			kfree(descq->desc_list);
+			descq->desc_list = NULL;
+		}
 
 		desc_ring_free(descq->xdev, descq->conf.rngsz, desc_sz, cs_sz,
 				descq->desc, descq->desc_bus);
