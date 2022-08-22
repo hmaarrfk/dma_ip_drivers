@@ -1,0 +1,62 @@
+name: Build Ubuntu Packages
+on:
+  pull_request:
+  push:
+    branches:
+      - 'main*'
+
+jobs:
+  build_module:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - KERNEL_VERSION_BUILD: "5.15.0-40"
+            os: "ubuntu-22.04"
+            mainline: false
+          - KERNEL_VERSION_BUILD: "5.8.0-63"
+            os: "ubuntu-20.04"
+            mainline: false
+          - KERNEL_VERSION_BUILD: "5.4.0-99"
+            os: "ubuntu-20.04"
+            mainline: false
+          - KERNEL_VERSION_BUILD: "5.11.0-46"
+            os: "ubuntu-20.04"
+            mainline: false
+          # https://kernel.ubuntu.com/~kernel-ppa/mainline/v5.17.15/amd64/
+          - KERNEL_VERSION_BUILD: "5.17.15-051715.202206141358"
+            os: "ubuntu-22.04"
+            mainline: true
+          # https://kernel.ubuntu.com/~kernel-ppa/mainline/v5.18.8/amd64/
+          # Known to fail with Xilinx's driver
+          # - KERNEL_VERSION_BUILD: "5.18.8-051808.202206290850"
+          #   os: "ubuntu-22.04"
+          #   mainline: true
+    env:
+      KERNEL_VERSION_BUILD: ${{ matrix.KERNEL_VERSION_BUILD }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Install OS dependencies
+        run: |
+          sudo apt-get update
+          sudo apt install -y --quiet build-essential libaio-dev libelf-dev
+      - name: Install standard kernel headers
+        if: ${{ matrix.mainline == false }}
+        run: |
+          sudo apt install -y --quiet linux-headers-${KERNEL_VERSION_BUILD}-generic
+      - name: Install mainline kernel headers
+        if: ${{ matrix.mainline == true }}
+        run: |
+          wget -q https://kernel.ubuntu.com/~kernel-ppa/mainline/v$(echo ${KERNEL_VERSION_BUILD}} | cut -d '-'  -f 1)/amd64/linux-headers-$(echo ${KERNEL_VERSION_BUILD} | cut -d '.' -f 1-3)-generic_${KERNEL_VERSION_BUILD}_amd64.deb
+          wget -q https://kernel.ubuntu.com/~kernel-ppa/mainline/v$(echo ${KERNEL_VERSION_BUILD}} | cut -d '-'  -f 1)/amd64/linux-headers-$(echo ${KERNEL_VERSION_BUILD} | cut -d '.' -f 1-3)_${KERNEL_VERSION_BUILD}_all.deb
+          sudo apt install --yes --quiet \
+            ./linux-headers-$(echo ${KERNEL_VERSION_BUILD} | cut -d '.' -f 1-3)-generic_${KERNEL_VERSION_BUILD}_amd64.deb \
+            ./linux-headers-$(echo ${KERNEL_VERSION_BUILD} | cut -d '.' -f 1-3)_${KERNEL_VERSION_BUILD}_all.deb
+      - name: Build QDMA
+        run: |
+          cd QDMA/linux-kernel
+          make KDIR=/lib/modules/$(echo ${KERNEL_VERSION_BUILD} | cut -d '.' -f 1-3)-generic/build
+      - run: echo "🍏 This job's status is ${{ job.status }}."
+
