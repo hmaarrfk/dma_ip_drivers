@@ -9,7 +9,7 @@
  * in the COPYING file in the root directory of this source tree).
  * You may select, at your option, one of the above-listed licenses.
  */
- 
+
 #ifndef QDMA_NL_H__
 #define QDMA_NL_H__
 /**
@@ -163,10 +163,8 @@ enum xnl_attr_t {
 	XNL_ATTR_DEV,
 	XNL_ATTR_DEBUG_EN,	/** Debug Regs Capability*/
 	XNL_ATTR_DESC_ENGINE_MODE, /** Descriptor Engine Capability */
-#ifdef ERR_DEBUG
-	XNL_ATTR_QPARAM_ERR_INFO,	/**< queue param info */
-#endif
 	XNL_ATTR_NUM_REGS,			/**< number of regs */
+	XNL_ATTR_QPARAM_ERR_INFO,	/**< queue param info */
 	XNL_ATTR_MAX,
 };
 
@@ -248,6 +246,8 @@ static const char *xnl_attr_str[XNL_ATTR_MAX + 1] = {
 	"CMPT_TIMER_IDX",		/**< XNL_ATTR_CMPT_TIMER_IDX */
 	"CMPT_CNTR_IDX",		/**< XNL_ATTR_CMPT_CNTR_IDX */
 	"CMPT_TRIG_MODE",		/**< XNL_ATTR_CMPT_TRIG_MODE */
+	"MM_CHANNEL",		/**< XNL_ATTR_MM_CHANNEL */
+	"CMPT_ENTRIRES_CNT",		/**< XNL_ATTR_CMPT_ENTRIES_CNT */
 	"RANGE_START",			/**< XNL_ATTR_RANGE_START */
 	"RANGE_END",			/**< XNL_ATTR_RANGE_END */
 	"INTR_VECTOR_IDX",		/**< XNL_ATTR_INTR_VECTOR_IDX */
@@ -263,14 +263,18 @@ static const char *xnl_attr_str[XNL_ATTR_MAX + 1] = {
 	"Q_STATE",			/**< XNL_ATTR_Q_STATE*/
 	"ERROR",			/**< XNL_ATTR_ERROR */
 	"PING_PONG_EN",		/**< XNL_PING_PONG_EN */
+	"APERTURE_SZ",			/**< XNL_ATTR_APERTURE_SZ */
+	"DEV_STAT_PING_PONG_LATMIN1",			/**< XNL_ATTR_DEV_STAT_PING_PONG_LATMIN1 */
+	"DEV_STAT_PING_PONG_LATMIN2",			/**< XNL_ATTR_DEV_STAT_PING_PONG_LATMIN2 */
+	"DEV_STAT_PING_PONG_LATMAX1",			/**< XNL_ATTR_DEV_STAT_PING_PONG_LATMAX1 */
+	"DEV_STAT_PING_PONG_LATMAX2",			/**< XNL_ATTR_DEV_STAT_PING_PONG_LATMAX2 */
+	"DEV_STAT_PING_PONG_LATAVG1",			/**< XNL_ATTR_DEV_STAT_PING_PONG_LATAVG1 */
+	"DEV_STAT_PING_PONG_LATAVG2",			/**< XNL_ATTR_DEV_STAT_PING_PONG_LATAVG2 */
 	"DEV_ATTR",			/**< XNL_ATTR_DEV */
 	"XNL_ATTR_DEBUG_EN",	/** XNL_ATTR_DEBUG_EN */
 	"XNL_ATTR_DESC_ENGINE_MODE",	/** XNL_ATTR_DESC_ENGINE_MODE */
-#ifdef ERR_DEBUG
 	"QPARAM_ERR_INFO",		/**< queue param info */
-#endif
 	"ATTR_MAX",
-
 };
 
 
@@ -288,7 +292,6 @@ enum xnl_op_t {
 	XNL_CMD_REG_DUMP,	/**< dump the register information */
 	XNL_CMD_REG_RD,		/**< read a register value */
 	XNL_CMD_REG_WRT,	/**< write value to a register */
-	XNL_CMD_REG_INFO_READ,
 
 	XNL_CMD_Q_LIST,		/**< list all the queue present in the system */
 	XNL_CMD_Q_ADD,		/**< add a queue */
@@ -300,22 +303,21 @@ enum xnl_op_t {
 	XNL_CMD_Q_CMPT,		/**< dump writeback descriptor information*/
 	XNL_CMD_Q_RX_PKT,	/**< dump packet information*/
 	XNL_CMD_Q_CMPT_READ,	/**< read the cmpt data */
-#ifdef ERR_DEBUG
-	XNL_CMD_Q_ERR_INDUCE,	/**< induce an error*/
-#endif
 
 	XNL_CMD_INTR_RING_DUMP,	/**< dump interrupt ring information*/
 	XNL_CMD_Q_UDD,		/**< dump the user defined data */
 	XNL_CMD_GLOBAL_CSR,	/**< get all global csr register values */
 	XNL_CMD_DEV_CAP,	/**< list h/w capabilities , hw and sw version */
 	XNL_CMD_GET_Q_STATE,	/**< get the queue state */
+	XNL_CMD_REG_INFO_READ,
+	XNL_CMD_Q_ERR_INDUCE,	/**< induce an error*/
 	XNL_CMD_MAX,		/**< max number of XNL commands*/
 };
 
 /**
  * XNL command operation type
  */
-static const char *xnl_op_str[XNL_CMD_MAX] = {
+static const char *xnl_op_str[XNL_CMD_MAX+1] = {
 	"DEV_LIST",		/** XNL_CMD_DEV_LIST */
 	"DEV_INFO",		/** XNL_CMD_DEV_INFO */
 	"DEV_STAT",		/** XNL_CMD_DEV_STAT */
@@ -335,10 +337,15 @@ static const char *xnl_op_str[XNL_CMD_MAX] = {
 	"Q_CMPT",		/** XNL_CMD_Q_CMPT */
 	"Q_RX_PKT",		/** XNL_CMD_Q_RX_PKT */
 	"Q_CMPT_READ",		/** XNL_CMD_Q_CMPT_READ */
+
 	"INTR_RING_DUMP",	/** XNL_CMD_INTR_RING_DUMP */
-#ifdef ERR_DEBUG
-	"Q_ERR_INDUCE"		/** XNL_CMD_Q_ERR_INDUCE */
-#endif
+	"Q_UDD_DUMP",	/** XNL_CMD_Q_UDD */
+	"GLOBAL_CSR",	/** XNL_CMD_GLOBAL_CSR */
+	"DEV_CAPABILITIES",	/** XNL_CMD_DEV_CAP */
+	"GET_Q_STATE",	/** XNL_CMD_GET_Q_STATE */
+	"REG_INFO_READ",	/** XNL_CMD_REG_INFO_READ */
+	"Q_ERR_INDUCE",		/** XNL_CMD_Q_ERR_INDUCE */
+	"CMD_MAX",		/** XNL_CMD_MAX */
 };
 
 enum qdma_queue_state {
