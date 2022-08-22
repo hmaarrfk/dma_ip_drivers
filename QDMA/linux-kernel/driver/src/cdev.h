@@ -107,6 +107,8 @@ struct qdma_io_cb {
 	unsigned int pages_nr;
 	/** scatter gather list */
 	struct qdma_sw_sg *sgl;
+	/** if true then used vmalloc() and need vfree() */
+	int vmalloc_used;
 	/** pages allocated to accommodate the scatter gather list */
 	struct page **pages;
 	/** qdma request */

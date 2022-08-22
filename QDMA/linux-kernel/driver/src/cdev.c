@@ -226,7 +226,13 @@ static inline void iocb_release(struct qdma_io_cb *iocb)
 {
 	if (iocb->pages)
 		iocb->pages = NULL;
-	kfree(iocb->sgl);
+	if (iocb->sgl) {
+		if (iocb->vmalloc_used)
+			vfree(iocb->sgl);
+		else
+			kfree(iocb->sgl);
+	}
+	iocb->vmalloc_used = 0;
 	iocb->sgl = NULL;
 	iocb->buf = NULL;
 }
@@ -262,6 +268,7 @@ static int map_user_buf_to_sgl(struct qdma_io_cb *iocb, bool write)
 	unsigned int pages_nr = (len + pg_off + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	int i;
 	int rv;
+	size_t sglsz;
 
 	if (len == 0)
 		pages_nr = 1;
@@ -269,14 +276,31 @@ static int map_user_buf_to_sgl(struct qdma_io_cb *iocb, bool write)
 		return -EINVAL;
 
 	iocb->pages_nr = 0;
-	sg = kmalloc(pages_nr * (sizeof(struct qdma_sw_sg) +
-			sizeof(struct page *)), GFP_KERNEL);
+	// if request too big for kmalloc then try vmalloc
+	sglsz = pages_nr * (sizeof(struct qdma_sw_sg) + sizeof(struct page *));
+	if (sglsz >= (MAX_ORDER_NR_PAGES * PAGE_SIZE)) {
+		pr_debug("req %lu >= kmalloc_max(%lu), try vmalloc\n",
+			sglsz, MAX_ORDER_NR_PAGES * PAGE_SIZE);
+		sg = vmalloc(sglsz);
+		iocb->vmalloc_used = 1;		// true if used vmalloc
+	} else {
+		// kmalloc can fail on busy system due to fragmentation
+		sg = kmalloc(sglsz, GFP_KERNEL);
+		if (sg == NULL) {
+			pr_debug("kmalloc(%lu) failed, try vmalloc\n", sglsz);
+			// try vmalloc when kmalloc fails
+			sg = vmalloc(sglsz);
+			iocb->vmalloc_used = 1;	// true if used vmalloc
+		} else
+			iocb->vmalloc_used = 0; // false if used kmalloc
+	}
 	if (!sg) {
-		pr_err("sgl allocation failed for %u pages", pages_nr);
+		iocb->vmalloc_used = 0;
+		pr_err("sgl allocation of %lu failed for %u pages",
+			sglsz, pages_nr);
 		return -ENOMEM;
 	}
-	memset(sg, 0, pages_nr * (sizeof(struct qdma_sw_sg) +
-			sizeof(struct page *)));
+	memset(sg, 0, sglsz);
 	iocb->sgl = sg;
 
 	iocb->pages = (struct page **)(sg + pages_nr);
