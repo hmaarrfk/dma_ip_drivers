@@ -1,4 +1,4 @@
-name: Build Ubuntu Packages
+name: Ubuntu QDMA
 on:
   pull_request:
   push:
